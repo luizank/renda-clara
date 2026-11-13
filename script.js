@@ -1,21 +1,64 @@
 const form = document.querySelector("#investment-form");
 const errorMessage = document.querySelector("#form-error");
 const resultsPeriod = document.querySelector("#results-period");
+const referenceRateSelect = document.querySelector("#reference-rate");
+const fetchReferenceRateButton = document.querySelector("#fetch-reference-rate");
+const referenceRateStatus = document.querySelector("#rate-source-status");
 const moneyFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
 });
 let currentSimulation;
+let investmentValidationAttempted = false;
 
 const formatMoney = (value) => moneyFormatter.format(value);
 
+function setInputInvalid(input, invalid) {
+  input.setAttribute("aria-invalid", String(invalid));
+  input.closest(".input-wrap, .input-with-select")?.classList.toggle("has-error", invalid);
+}
+
+function validateInvestmentForm() {
+  const { initialAmount, monthlyContribution, interestRate, investmentPeriod, timePeriod } =
+    form.elements;
+  const isInvalid = (input, { required = false, min = 0, max = Infinity } = {}) => {
+    if (input.validity.badInput || (required && input.value === "")) return true;
+    if (input.value === "") return false;
+    const value = Number(input.value);
+    return !Number.isFinite(value) || value < min || value > max;
+  };
+  const invalidFields = [
+    [initialAmount, isInvalid(initialAmount)],
+    [monthlyContribution, isInvalid(monthlyContribution)],
+    [interestRate, isInvalid(interestRate, { required: true, max: 1000 })],
+    [
+      investmentPeriod,
+      isInvalid(investmentPeriod, {
+        required: true,
+        min: 1,
+        max: timePeriod.value === "year" ? 100 : 1200,
+      }),
+    ],
+  ];
+
+  invalidFields.forEach(([input, invalid]) => setInputInvalid(input, invalid));
+  return invalidFields.every(([, invalid]) => !invalid);
+}
+
 function getSimulation() {
-  const initialAmount = Number(form.elements.initialAmount.value);
-  const monthlyContribution = Number(form.elements.monthlyContribution.value);
+  const initialAmount = Number(form.elements.initialAmount.value || 0);
+  const monthlyContribution = Number(form.elements.monthlyContribution.value || 0);
   const interestRate = Number(form.elements.interestRate.value);
   const ratePeriod = form.elements.ratePeriod.value;
   const investmentPeriod = Number(form.elements.investmentPeriod.value);
   const timePeriod = form.elements.timePeriod.value;
+
+  if (
+    form.elements.interestRate.value === "" ||
+    form.elements.investmentPeriod.value === ""
+  ) {
+    throw new Error("Informe a rentabilidade e o tempo do investimento para calcular.");
+  }
 
   if (
     !Number.isFinite(initialAmount) ||
@@ -159,6 +202,7 @@ function formatAxisValue(value) {
 }
 
 function updateResults(simulation) {
+  document.querySelector("#results").hidden = false;
   document.querySelector("#future-value").textContent = formatMoney(simulation.balance);
   document.querySelector("#invested-value").textContent = formatMoney(simulation.totalInvested);
   document.querySelector("#interest-value").textContent = formatMoney(simulation.interestEarned);
@@ -172,6 +216,12 @@ function updateResults(simulation) {
 form.addEventListener("submit", (event) => {
   event.preventDefault();
   errorMessage.hidden = true;
+  investmentValidationAttempted = true;
+  if (!validateInvestmentForm()) {
+    errorMessage.textContent = "Confira os campos destacados e corrija os valores para calcular.";
+    errorMessage.hidden = false;
+    return;
+  }
 
   try {
     currentSimulation = getSimulation();
@@ -179,6 +229,109 @@ form.addEventListener("submit", (event) => {
   } catch (error) {
     errorMessage.textContent = error.message;
     errorMessage.hidden = false;
+  }
+});
+
+form.addEventListener("input", (event) => {
+  if (!investmentValidationAttempted || !event.target.matches('input[type="number"]')) return;
+  const isValid = validateInvestmentForm();
+  errorMessage.hidden = isValid;
+  if (!isValid) {
+    errorMessage.textContent = "Confira os campos destacados e corrija os valores para calcular.";
+  }
+});
+
+form.elements.timePeriod.addEventListener("change", () => {
+  if (investmentValidationAttempted) {
+    const isValid = validateInvestmentForm();
+    errorMessage.hidden = isValid;
+    if (!isValid) {
+      errorMessage.textContent = "Confira os campos destacados e corrija os valores para calcular.";
+    }
+  }
+});
+
+function parseBcbDate(value) {
+  const [day, month, year] = value.split("/").map(Number);
+  const date = new Date(year, month - 1, day);
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+  return date;
+}
+
+fetchReferenceRateButton.addEventListener("click", async () => {
+  const rateSources = {
+    selic: { label: "Selic efetiva", series: "1178" },
+    cdi: { label: "CDI", series: "4389" },
+  };
+  const source = rateSources[referenceRateSelect.value];
+  fetchReferenceRateButton.disabled = true;
+  referenceRateStatus.classList.remove("is-error");
+  referenceRateStatus.textContent = `Consultando a série diária de ${source.label} no Banco Central...`;
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 12000);
+
+  try {
+    const url = new URL(
+      `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${source.series}/dados/ultimos/10`,
+    );
+    url.searchParams.set("formato", "json");
+    const response = await fetch(url, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`O Banco Central respondeu com o erro ${response.status}.`);
+    }
+
+    const observations = await response.json();
+    if (!Array.isArray(observations)) {
+      throw new Error("A resposta do Banco Central não contém uma série válida.");
+    }
+
+    const latestObservation = observations
+      .map((observation) => ({
+        date: parseBcbDate(observation.data),
+        value: Number(observation.valor),
+      }))
+      .filter(
+        (observation) =>
+          observation.date instanceof Date &&
+          Number.isFinite(observation.value) &&
+          observation.value > 0,
+      )
+      .sort((first, second) => second.date.getTime() - first.date.getTime())[0];
+
+    if (!latestObservation) {
+      throw new Error("Não foi encontrada uma observação válida para essa taxa.");
+    }
+
+    form.elements.interestRate.value = latestObservation.value.toString();
+    form.elements.ratePeriod.value = "year";
+    referenceRateStatus.textContent =
+      `${source.label}: ${latestObservation.value.toLocaleString("pt-BR", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 6,
+      })}% ao ano, observada em ${latestObservation.date.toLocaleDateString("pt-BR")}. Fonte: Banco Central do Brasil.`;
+    form.requestSubmit();
+  } catch (error) {
+    const detail = error.name === "AbortError"
+      ? "A consulta excedeu 12 segundos."
+      : error instanceof TypeError
+        ? "Não foi possível acessar a API. Verifique a conexão e se o site está em HTTP/HTTPS."
+        : error.message;
+    referenceRateStatus.textContent = `Não foi possível obter a taxa: ${detail}`;
+    referenceRateStatus.classList.add("is-error");
+  } finally {
+    window.clearTimeout(timeoutId);
+    fetchReferenceRateButton.disabled = false;
   }
 });
 
@@ -447,17 +600,28 @@ function setupStocksScreen() {
       return changePercent;
     }
 
-    function updateStockSimulation() {
+    function updateStockSimulation(showEmptyError = false) {
       if (!currentHistoryPoints.length || !Number.isFinite(activeHistoryReturn)) return;
 
-      const investment = Number(stockSimulationForm.elements.investment.value);
+      const investmentValue = stockSimulationForm.elements.investment.value;
+      if (investmentValue === "") {
+        setInputInvalid(stockSimulationForm.elements.investment, showEmptyError);
+        stockResults.hidden = true;
+        stockFormError.textContent = "Informe um valor inicial maior que zero para ver a simulação.";
+        stockFormError.hidden = !showEmptyError;
+        return;
+      }
+
+      const investment = Number(investmentValue);
       if (!Number.isFinite(investment) || investment <= 0) {
+        setInputInvalid(stockSimulationForm.elements.investment, true);
         stockFormError.textContent = "Informe um valor inicial maior que zero para ver a simulação.";
         stockFormError.hidden = false;
         stockResults.hidden = true;
         return;
       }
 
+      setInputInvalid(stockSimulationForm.elements.investment, false);
       stockFormError.hidden = true;
       const firstPoint = currentHistoryPoints[0];
       const lastPoint = currentHistoryPoints[currentHistoryPoints.length - 1];
@@ -744,19 +908,25 @@ function setupStocksScreen() {
     }
 
     function showCurrentScreen() {
-      const stocksVisible = window.location.hash === "#acoes";
-      document.querySelector("#home-screen").hidden = stocksVisible;
-      document.querySelector("#stocks-screen").hidden = !stocksVisible;
+      const currentScreen = {
+        "#acoes": "stocks",
+        "#calculadoras": "calculators",
+      }[window.location.hash] || "home";
+      document.querySelector("#home-screen").hidden = currentScreen !== "home";
+      document.querySelector("#stocks-screen").hidden = currentScreen !== "stocks";
+      document.querySelector("#calculators-screen").hidden = currentScreen !== "calculators";
       for (const link of document.querySelectorAll("[data-screen-link]")) {
-        const active = link.dataset.screenLink === (stocksVisible ? "stocks" : "home");
+        const active = link.dataset.screenLink === currentScreen;
         if (active) link.setAttribute("aria-current", "page");
         else link.removeAttribute("aria-current");
       }
 
-      document.title = stocksVisible
+      document.title = currentScreen === "stocks"
         ? "Ações e simulação — Renda Clara"
-        : "Renda Clara — Calculadora de juros compostos";
-      if (stocksVisible && quoteMap.size === 0 && !quotesLoading) {
+        : currentScreen === "calculators"
+          ? "Calculadoras financeiras — Renda Clara"
+          : "Renda Clara — Calculadora de juros compostos";
+      if (currentScreen === "stocks" && quoteMap.size === 0 && !quotesLoading) {
         fetchQuotes(quoteSymbols);
       }
       window.scrollTo(0, 0);
@@ -801,7 +971,7 @@ function setupStocksScreen() {
 
     stockSimulationForm.addEventListener("submit", (event) => {
       event.preventDefault();
-      updateStockSimulation();
+      updateStockSimulation(true);
     });
 
     stockSimulationForm.elements.investment.addEventListener("input", () => {
@@ -819,9 +989,243 @@ function setupStocksScreen() {
 
 setupStocksScreen();
 
-window.addEventListener("resize", () => {
-  drawChart(currentSimulation.points);
-});
+function setupAdditionalCalculators() {
+  const options = document.querySelectorAll(".calculator-option");
+  const forms = document.querySelectorAll(".additional-calculator-form");
+  const title = document.querySelector("#additional-calculator-title");
+  const kicker = document.querySelector("#additional-calculator-kicker");
+  const results = document.querySelector("#additional-results");
+  const resultTitle = document.querySelector("#additional-result-title");
+  const resultValues = document.querySelector("#additional-result-values");
+  const resultNote = document.querySelector("#additional-result-note");
+  const calculatorInfo = {
+    retirement: { title: "Aposentadoria", kicker: "PLANEJE O FUTURO" },
+    cash: { title: "À vista ou a prazo", kicker: "COMPARE AS FORMAS DE PAGAMENTO" },
+    housing: { title: "Financiamento ou aluguel", kicker: "COMPARE OS CENÁRIOS" },
+    milestone: { title: "Metas de patrimônio", kicker: "ACOMPANHE SUA META" },
+  };
+  let activeCalculator = "retirement";
+  let validationAttempted = false;
 
-currentSimulation = getSimulation();
-updateResults(currentSimulation);
+  function validateCalculatorForm(form) {
+    let isValid = true;
+    for (const input of form.querySelectorAll('input[type="number"]')) {
+      const emptyRequired = input.required && input.value === "";
+      const value = Number(input.value);
+      const invalid = input.validity.badInput || emptyRequired ||
+        (input.value !== "" && (
+          !Number.isFinite(value) ||
+          (input.min !== "" && value < Number(input.min)) ||
+          (input.max !== "" && value > Number(input.max))
+        ));
+      setInputInvalid(input, invalid);
+      if (invalid) isValid = false;
+    }
+    if (
+      form.id === "retirement-form" &&
+      Number(form.elements.current.value || 0) === 0 &&
+      Number(form.elements.monthly.value || 0) === 0
+    ) {
+      setInputInvalid(form.elements.monthly, true);
+      isValid = false;
+    }
+    if (
+      form.id === "housing-form" &&
+      form.elements.price.value !== "" &&
+      form.elements.downpayment.value !== "" &&
+      Number(form.elements.downpayment.value) > Number(form.elements.price.value)
+    ) {
+      setInputInvalid(form.elements.downpayment, true);
+      isValid = false;
+    }
+    return isValid;
+  }
+
+  function showResult(heading, metrics, note) {
+    resultTitle.textContent = heading;
+    resultValues.replaceChildren();
+    for (const [label, value] of metrics) {
+      const metric = document.createElement("div");
+      const metricLabel = document.createElement("span");
+      const metricValue = document.createElement("strong");
+      metricLabel.textContent = label;
+      metricValue.textContent = value;
+      metric.append(metricLabel, metricValue);
+      resultValues.append(metric);
+    }
+    resultNote.textContent = note;
+    results.hidden = false;
+  }
+
+  function getValues(form, names) {
+    return Object.fromEntries(names.map((name) => {
+      const value = form.elements[name].value;
+      return [name, value === "" ? 0 : Number(value)];
+    }));
+  }
+
+  function getMonthlyRate(annualPercent) {
+    return Math.pow(1 + annualPercent / 100, 1 / 12) - 1;
+  }
+
+  function formatDuration(months) {
+    const years = Math.floor(months / 12);
+    const remainingMonths = months % 12;
+    if (years === 0) return `${remainingMonths} ${remainingMonths === 1 ? "mês" : "meses"}`;
+    if (remainingMonths === 0) return `${years} ${years === 1 ? "ano" : "anos"}`;
+    return `${years} ${years === 1 ? "ano" : "anos"} e ${remainingMonths} ${remainingMonths === 1 ? "mês" : "meses"}`;
+  }
+
+  function calculateRetirement(form) {
+    const { current, monthly, years, rate } = getValues(form, ["current", "monthly", "years", "rate"]);
+    const months = years * 12;
+    const monthlyRate = getMonthlyRate(rate);
+    let balance = current;
+    for (let month = 0; month < months; month += 1) {
+      balance = balance * (1 + monthlyRate) + monthly;
+    }
+    const contributed = current + monthly * months;
+    showResult("Estimativa ao se aposentar", [
+      ["Patrimônio estimado", formatMoney(balance)],
+      ["Total que saiu do seu bolso", formatMoney(contributed)],
+      ["Renda mensal estimada* ", formatMoney(balance * monthlyRate)],
+    ], "*Renda aproximada pelo rendimento mensal do saldo, sem resgatar o principal. Simulação nominal, com taxa constante e sem impostos ou inflação.");
+  }
+
+  function calculateCashPurchase(form) {
+    const { cashPrice, installment, count, rate } = getValues(form, ["cashPrice", "installment", "count", "rate"]);
+    const monthlyRate = getMonthlyRate(rate);
+    const totalInstallments = installment * count;
+    const presentValue = monthlyRate === 0
+      ? totalInstallments
+      : installment * (1 - Math.pow(1 + monthlyRate, -count)) / monthlyRate;
+    const difference = Math.abs(cashPrice - presentValue);
+    const recommendation = difference < 0.01
+      ? "As opções têm custo presente semelhante."
+      : presentValue < cashPrice
+        ? "Parcelar pode ser mais vantajoso considerando o rendimento informado."
+        : "Pagar à vista pode ser mais vantajoso considerando o rendimento informado.";
+    showResult(recommendation, [
+      ["Preço à vista", formatMoney(cashPrice)],
+      ["Total nominal parcelado", formatMoney(totalInstallments)],
+      ["Valor presente das parcelas*", formatMoney(presentValue)],
+      ["Diferença estimada", formatMoney(difference)],
+    ], "*O valor presente desconta as parcelas pelo rendimento mensal equivalente à taxa anual informada. Considere também tarifas, reajustes e condições reais de pagamento.");
+  }
+
+  function calculateHousing(form) {
+    const { price, downpayment, rent, years, rate } = getValues(form, ["price", "downpayment", "rent", "years", "rate"]);
+    const principal = price - downpayment;
+    const months = years * 12;
+    const monthlyRate = getMonthlyRate(rate);
+    const payment = monthlyRate === 0
+      ? principal / months
+      : principal * monthlyRate / (1 - Math.pow(1 + monthlyRate, -months));
+    const financedTotal = downpayment + payment * months;
+    const rentTotal = rent * months;
+    showResult(payment <= rent
+      ? "A parcela estimada cabe abaixo do aluguel informado."
+      : "A parcela estimada fica acima do aluguel informado.", [
+      ["Valor financiado", formatMoney(principal)],
+      ["Parcela mensal estimada", formatMoney(payment)],
+      ["Aluguel acumulado no período", formatMoney(rentTotal)],
+      ["Entrada + parcelas estimadas", formatMoney(financedTotal)],
+    ], "Estimativa simplificada: não inclui seguros, taxas, condomínio, manutenção, reajuste do aluguel nem o valor do imóvel ao fim do financiamento. Compare as condições reais antes de decidir.");
+  }
+
+  function calculateMilestone(form) {
+    const { current, monthly, rate } = getValues(form, ["current", "monthly", "rate"]);
+    const target = Number(form.elements.target.value);
+    const monthlyRate = getMonthlyRate(rate);
+    let balance = current;
+    let months = 0;
+    while (balance < target && months < 1200) {
+      balance = balance * (1 + monthlyRate) + monthly;
+      months += 1;
+    }
+    if (balance < target) {
+      showResult("Meta não alcançada no período simulado", [
+        ["Meta escolhida", formatMoney(target)],
+        ["Saldo após 100 anos", formatMoney(balance)],
+      ], "Com os valores informados, a meta não foi alcançada em até 100 anos. Aumentar os aportes ou rever as premissas pode alterar a estimativa.");
+      return;
+    }
+    const contributed = current + monthly * months;
+    showResult(current >= target
+      ? "Você já alcançou essa meta!"
+      : `Estimativa para chegar a ${formatMoney(target)}`, [
+      ["Tempo estimado", formatDuration(months)],
+      ["Saldo estimado ao alcançar a meta", formatMoney(balance)],
+      ["Total aportado", formatMoney(contributed)],
+    ], "Simulação nominal com rendimento constante, aportes no fim de cada mês e sem considerar impostos ou inflação. Rentabilidade futura pode variar.");
+  }
+
+  for (const option of options) {
+    option.addEventListener("click", () => {
+      activeCalculator = option.dataset.calculator;
+      validationAttempted = false;
+      for (const button of options) {
+        button.setAttribute("aria-pressed", String(button === option));
+      }
+      for (const form of forms) {
+        form.hidden = form.dataset.calculatorForm !== activeCalculator;
+        form.querySelectorAll('input[type="number"]').forEach((input) => setInputInvalid(input, false));
+        form.querySelector(".form-error").hidden = true;
+      }
+      title.textContent = calculatorInfo[activeCalculator].title;
+      kicker.textContent = calculatorInfo[activeCalculator].kicker;
+      results.hidden = true;
+    });
+  }
+
+  for (const form of forms) {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      validationAttempted = true;
+      const error = form.querySelector(".form-error");
+      if (!validateCalculatorForm(form)) {
+        error.textContent = form.id === "housing-form" &&
+          Number(form.elements.downpayment.value) > Number(form.elements.price.value)
+          ? "A entrada não pode ser maior que o valor do imóvel."
+          : "Confira os campos destacados e corrija os valores para continuar.";
+        error.hidden = false;
+        results.hidden = true;
+        return;
+      }
+      error.hidden = true;
+      if (form.id === "retirement-form") calculateRetirement(form);
+      else if (form.id === "cash-form") calculateCashPurchase(form);
+      else if (form.id === "housing-form") calculateHousing(form);
+      else calculateMilestone(form);
+    });
+
+    form.addEventListener("input", (event) => {
+      if (!validationAttempted || !event.target.matches('input[type="number"]')) return;
+      const error = form.querySelector(".form-error");
+      const isValid = validateCalculatorForm(form);
+      error.hidden = isValid;
+      if (!isValid) {
+        error.textContent = form.id === "housing-form" &&
+          Number(form.elements.downpayment.value) > Number(form.elements.price.value)
+          ? "A entrada não pode ser maior que o valor do imóvel."
+          : "Confira os campos destacados e corrija os valores para continuar.";
+      }
+    });
+  }
+
+  for (const button of document.querySelectorAll("[data-target]")) {
+    button.addEventListener("click", () => {
+      document.querySelector("#milestone-target").value = button.dataset.target;
+      for (const targetButton of document.querySelectorAll("[data-target]")) {
+        targetButton.setAttribute("aria-pressed", String(targetButton === button));
+      }
+      results.hidden = true;
+    });
+  }
+}
+
+setupAdditionalCalculators();
+
+window.addEventListener("resize", () => {
+  if (currentSimulation) drawChart(currentSimulation.points);
+});
