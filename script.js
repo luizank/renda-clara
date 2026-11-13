@@ -8,8 +8,79 @@ const moneyFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
 });
+const monetaryInputs = [
+  document.getElementById("initial-amount"),
+  document.getElementById("monthly-contribution"),
+  document.getElementById("stock-investment"),
+  document.getElementById("retirement-current"),
+  document.getElementById("retirement-monthly"),
+  document.getElementById("cash-price"),
+  document.getElementById("housing-price"),
+  document.getElementById("housing-downpayment"),
+  document.getElementById("housing-rent"),
+  document.getElementById("milestone-target"),
+  document.getElementById("milestone-current"),
+  document.getElementById("milestone-monthly"),
+].filter(Boolean);
+const decimalInputs = [
+  document.getElementById("interest-rate"),
+  document.getElementById("retirement-rate"),
+  document.getElementById("cash-rate"),
+  document.getElementById("housing-rate"),
+  document.getElementById("milestone-rate"),
+].filter(Boolean);
 let currentSimulation;
 let investmentValidationAttempted = false;
+
+function parseCurrencyValue(value) {
+  if (value === null || value === undefined || value === "") return 0;
+  const sanitized = String(value).trim().replace(/\./g, "").replace(",", ".");
+  const parsed = Number(sanitized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseDecimalValue(value) {
+  if (value === null || value === undefined || value === "") return 0;
+  const parsed = Number(String(value).trim().replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+function parseInputValue(input) {
+  return input.dataset.decimalInput === "true"
+    ? parseDecimalValue(input.value)
+    : parseCurrencyValue(input.value);
+}
+
+function formatCurrencyInput(value) {
+  if (value === "") return "";
+  const digits = String(value).replace(/\D/g, "");
+  if (!digits) return "";
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+function enableThousandSeparator(input) {
+  if (!input || input.dataset.thousandSeparatorEnabled === "true") return;
+  input.dataset.thousandSeparatorEnabled = "true";
+  input.dataset.moneyInput = "true";
+  input.type = "text";
+  input.inputMode = "numeric";
+  input.addEventListener("input", () => {
+    const formatted = formatCurrencyInput(input.value);
+    if (formatted !== input.value) {
+      input.value = formatted;
+      if (typeof input.setSelectionRange === "function") {
+        input.setSelectionRange(input.value.length, input.value.length);
+      }
+    }
+  });
+}
+
+monetaryInputs.forEach(enableThousandSeparator);
+decimalInputs.forEach((input) => {
+  input.dataset.decimalInput = "true";
+  input.type = "text";
+  input.inputMode = "decimal";
+});
 
 const formatMoney = (value) => moneyFormatter.format(value);
 
@@ -24,7 +95,7 @@ function validateInvestmentForm() {
   const isInvalid = (input, { required = false, min = 0, max = Infinity } = {}) => {
     if (input.validity.badInput || (required && input.value === "")) return true;
     if (input.value === "") return false;
-    const value = Number(input.value);
+    const value = parseInputValue(input);
     return !Number.isFinite(value) || value < min || value > max;
   };
   const invalidFields = [
@@ -46,9 +117,9 @@ function validateInvestmentForm() {
 }
 
 function getSimulation() {
-  const initialAmount = Number(form.elements.initialAmount.value || 0);
-  const monthlyContribution = Number(form.elements.monthlyContribution.value || 0);
-  const interestRate = Number(form.elements.interestRate.value);
+  const initialAmount = parseCurrencyValue(form.elements.initialAmount.value || 0);
+  const monthlyContribution = parseCurrencyValue(form.elements.monthlyContribution.value || 0);
+  const interestRate = parseDecimalValue(form.elements.interestRate.value);
   const ratePeriod = form.elements.ratePeriod.value;
   const investmentPeriod = Number(form.elements.investmentPeriod.value);
   const timePeriod = form.elements.timePeriod.value;
@@ -233,7 +304,7 @@ form.addEventListener("submit", (event) => {
 });
 
 form.addEventListener("input", (event) => {
-  if (!investmentValidationAttempted || !event.target.matches('input[type="number"]')) return;
+  if (!investmentValidationAttempted || !event.target.matches('input[type="number"], input[data-money-input="true"], input[data-decimal-input="true"]')) return;
   const isValid = validateInvestmentForm();
   errorMessage.hidden = isValid;
   if (!isValid) {
@@ -612,7 +683,7 @@ function setupStocksScreen() {
         return;
       }
 
-      const investment = Number(investmentValue);
+      const investment = parseCurrencyValue(investmentValue);
       if (!Number.isFinite(investment) || investment <= 0) {
         setInputInvalid(stockSimulationForm.elements.investment, true);
         stockFormError.textContent = "Informe um valor inicial maior que zero para ver a simulação.";
@@ -1009,9 +1080,9 @@ function setupAdditionalCalculators() {
 
   function validateCalculatorForm(form) {
     let isValid = true;
-    for (const input of form.querySelectorAll('input[type="number"]')) {
+    for (const input of form.querySelectorAll('input[type="number"], input[data-money-input="true"], input[data-decimal-input="true"]')) {
       const emptyRequired = input.required && input.value === "";
-      const value = Number(input.value);
+      const value = parseInputValue(input);
       const invalid = input.validity.badInput || emptyRequired ||
         (input.value !== "" && (
           !Number.isFinite(value) ||
@@ -1023,8 +1094,8 @@ function setupAdditionalCalculators() {
     }
     if (
       form.id === "retirement-form" &&
-      Number(form.elements.current.value || 0) === 0 &&
-      Number(form.elements.monthly.value || 0) === 0
+      parseCurrencyValue(form.elements.current.value || 0) === 0 &&
+      parseCurrencyValue(form.elements.monthly.value || 0) === 0
     ) {
       setInputInvalid(form.elements.monthly, true);
       isValid = false;
@@ -1033,7 +1104,7 @@ function setupAdditionalCalculators() {
       form.id === "housing-form" &&
       form.elements.price.value !== "" &&
       form.elements.downpayment.value !== "" &&
-      Number(form.elements.downpayment.value) > Number(form.elements.price.value)
+      parseCurrencyValue(form.elements.downpayment.value) > parseCurrencyValue(form.elements.price.value)
     ) {
       setInputInvalid(form.elements.downpayment, true);
       isValid = false;
@@ -1060,7 +1131,7 @@ function setupAdditionalCalculators() {
   function getValues(form, names) {
     return Object.fromEntries(names.map((name) => {
       const value = form.elements[name].value;
-      return [name, value === "" ? 0 : Number(value)];
+      return [name, value === "" ? 0 : parseInputValue(form.elements[name])];
     }));
   }
 
@@ -1135,7 +1206,7 @@ function setupAdditionalCalculators() {
 
   function calculateMilestone(form) {
     const { current, monthly, rate } = getValues(form, ["current", "monthly", "rate"]);
-    const target = Number(form.elements.target.value);
+    const target = parseCurrencyValue(form.elements.target.value);
     const monthlyRate = getMonthlyRate(rate);
     let balance = current;
     let months = 0;
@@ -1169,7 +1240,7 @@ function setupAdditionalCalculators() {
       }
       for (const form of forms) {
         form.hidden = form.dataset.calculatorForm !== activeCalculator;
-        form.querySelectorAll('input[type="number"]').forEach((input) => setInputInvalid(input, false));
+        form.querySelectorAll('input[type="number"], input[data-money-input="true"], input[data-decimal-input="true"]').forEach((input) => setInputInvalid(input, false));
         form.querySelector(".form-error").hidden = true;
       }
       title.textContent = calculatorInfo[activeCalculator].title;
@@ -1185,7 +1256,7 @@ function setupAdditionalCalculators() {
       const error = form.querySelector(".form-error");
       if (!validateCalculatorForm(form)) {
         error.textContent = form.id === "housing-form" &&
-          Number(form.elements.downpayment.value) > Number(form.elements.price.value)
+          parseCurrencyValue(form.elements.downpayment.value) > parseCurrencyValue(form.elements.price.value)
           ? "A entrada não pode ser maior que o valor do imóvel."
           : "Confira os campos destacados e corrija os valores para continuar.";
         error.hidden = false;
@@ -1200,13 +1271,13 @@ function setupAdditionalCalculators() {
     });
 
     form.addEventListener("input", (event) => {
-      if (!validationAttempted || !event.target.matches('input[type="number"]')) return;
+      if (!validationAttempted || !event.target.matches('input[type="number"], input[data-money-input="true"], input[data-decimal-input="true"]')) return;
       const error = form.querySelector(".form-error");
       const isValid = validateCalculatorForm(form);
       error.hidden = isValid;
       if (!isValid) {
         error.textContent = form.id === "housing-form" &&
-          Number(form.elements.downpayment.value) > Number(form.elements.price.value)
+          parseCurrencyValue(form.elements.downpayment.value) > parseCurrencyValue(form.elements.price.value)
           ? "A entrada não pode ser maior que o valor do imóvel."
           : "Confira os campos destacados e corrija os valores para continuar.";
       }
