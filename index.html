@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f6f7f2" />
+    <meta
+      name="description"
+      content="Simule seus investimentos com juros compostos. Descubra quanto seu dinheiro pode render com aportes mensais."
+    />
+    <title>Renda Clara — Calculadora de juros compostos</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="script.js" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#inicio" aria-label="Renda Clara — página inicial">
+        <span class="brand-mark" aria-hidden="true">r.</span>
+        <span>renda<span class="brand-light">clara</span></span>
+      </a>
+      <nav class="site-nav" aria-label="Navegação principal">
+        <a href="#inicio" data-screen-link="home">Calculadora</a>
+        <a href="#acoes" data-screen-link="stocks">Ações</a>
+      </nav>
+      <span class="header-note"
+        ><span class="status-dot"></span> Planeje hoje. Cresça no seu
+        tempo.</span
+      >
+    </header>
+
+    <main>
+      <div class="page-shell page-screen" id="home-screen">
+        <section class="intro" aria-labelledby="page-title">
+          <p class="eyebrow">
+            <span class="eyebrow-line"></span> FERRAMENTA GRATUITA
+          </p>
+          <h1 id="page-title">
+            Seu futuro começa<br />com <span>um bom plano.</span>
+          </h1>
+          <p class="intro-copy">
+            Descubra como seus investimentos podem crescer com o tempo e com a
+            força dos juros compostos.
+          </p>
+        </section>
+
+        <div class="content-layout">
+          <div class="main-column">
+            <section class="calculator-card" aria-labelledby="calculator-title">
+              <div class="card-heading">
+                <div>
+                  <p class="section-kicker">SIMULE SEU INVESTIMENTO</p>
+                  <h2 id="calculator-title">Quanto você quer investir?</h2>
+                </div>
+                <span class="calculator-icon" aria-hidden="true">↗</span>
+              </div>
+
+              <form id="investment-form" novalidate>
+                <div class="fields-grid">
+                  <div class="field">
+                    <label for="initial-amount"
+                      >Quanto já tem para começar?</label
+                    >
+                    <div class="input-wrap">
+                      <span class="input-prefix" aria-hidden="true">R$</span>
+                      <input
+                        id="initial-amount"
+                        name="initialAmount"
+                        type="number"
+                        min="0"
+                        step="100"
+                        value="10000"
+                        inputmode="decimal"
+                      />
+                    </div>
+                    <span class="field-hint">Pode começar do zero</span>
+                  </div>
+
+                  <div class="field">
+                    <label for="monthly-contribution"
+                      >Quanto vai investir por mês?</label
+                    >
+                    <div class="input-wrap">
+                      <span class="input-prefix" aria-hidden="true">R$</span>
+                      <input
+                        id="monthly-contribution"
+                        name="monthlyContribution"
+                        type="number"
+                        min="0"
+                        step="50"
+                        value="500"
+                        inputmode="decimal"
+                      />
+                    </div>
+                    <span class="field-hint"
+                      >Aportes feitos no fim de cada mês</span
+                    >
+                  </div>
+
+                  <div class="field">
+                    <label for="interest-rate">Qual é a rentabilidade?</label>
+                    <div class="input-with-select">
+                      <input
+                        id="interest-rate"
+                        name="interestRate"
+                        type="number"
+                        min="0"
+                        max="1000"
+                        step="0.1"
+                        value="10"
+                        inputmode="decimal"
+                      />
+                      <span class="input-suffix">%</span>
+                      <select
+                        id="rate-period"
+                        name="ratePeriod"
+                        aria-label="Período da rentabilidade"
+                      >
+                        <option value="year" selected>ao ano</option>
+                        <option value="month">ao mês</option>
+                      </select>
+                    </div>
+                    <span class="field-hint"
+                      >Informe uma taxa antes de impostos</span
+                    >
+                  </div>
+
+                  <div class="field">
+                    <label for="investment-period">Por quanto tempo?</label>
+                    <div class="input-with-select">
+                      <input
+                        id="investment-period"
+                        name="investmentPeriod"
+                        type="number"
+                        min="1"
+                        max="100"
+                        step="1"
+                        value="10"
+                        inputmode="numeric"
+                      />
+                      <select
+                        id="time-period"
+                        name="timePeriod"
+                        aria-label="Unidade do período"
+                      >
+                        <option value="year" selected>anos</option>
+                        <option value="month">meses</option>
+                      </select>
+                    </div>
+                    <span class="field-hint">Simulações de até 100 anos</span>
+                  </div>
+                </div>
+
+                <p class="form-error" id="form-error" role="alert" hidden></p>
+                <button class="calculate-button" type="submit">
+                  Calcular meu investimento <span aria-hidden="true">→</span>
+                </button>
+                <p class="privacy-note">
+                  <span aria-hidden="true">▣</span> Seus dados ficam só neste
+                  dispositivo.
+                </p>
+              </form>
+
+              <section
+                class="results"
+                id="results"
+                aria-labelledby="results-title"
+                aria-live="polite"
+              >
+                <div class="results-heading">
+                  <div>
+                    <p class="section-kicker">OLHA SÓ O QUE PODE ACONTECER</p>
+                    <h3 id="results-title">Seu investimento no futuro</h3>
+                  </div>
+                  <span class="results-period" id="results-period"></span>
+                </div>
+                <div class="result-total">
+                  <span>Montante estimado</span>
+                  <strong id="future-value">R$ 0,00</strong>
+                </div>
+                <div class="chart-wrap">
+                  <canvas
+                    id="growth-chart"
+                    role="img"
+                    aria-label="Gráfico de crescimento do investimento ao longo do tempo"
+                  ></canvas>
+                  <div class="chart-legend">
+                    <span
+                      ><i class="legend-dot legend-invested"></i> Total
+                      investido</span
+                    >
+                    <span
+                      ><i class="legend-dot legend-interest"></i> Juros
+                      acumulados</span
+                    >
+                  </div>
+                </div>
+                <div class="result-breakdown">
+                  <div>
+                    <span class="breakdown-label"
+                      ><i class="breakdown-dot dot-invested"></i> Do seu
+                      bolso</span
+                    >
+                    <strong id="invested-value">R$ 0,00</strong>
+                  </div>
+                  <div>
+                    <span class="breakdown-label"
+                      ><i class="breakdown-dot dot-interest"></i> Juros
+                      ganhos</span
+                    >
+                    <strong id="interest-value">R$ 0,00</strong>
+                  </div>
+                </div>
+                <p class="disclaimer">
+                  Simulação ilustrativa, sem considerar impostos, inflação ou
+                  taxas. Rentabilidade passada não garante resultados futuros.
+                </p>
+              </section>
+            </section>
+
+            <section class="how-it-works" aria-labelledby="how-title">
+              <div class="how-icon" aria-hidden="true">✳</div>
+              <div>
+                <h2 id="how-title">O tempo também investe com você.</h2>
+                <p>
+                  Nos juros compostos, o rendimento de cada período se soma ao
+                  valor investido. Com aportes frequentes, até pequenas quantias
+                  podem crescer ao longo do tempo.
+                </p>
+                <p class="formula">
+                  Montante = investimento × (1 + taxa)<sup>tempo</sup>
+                </p>
+              </div>
+            </section>
+          </div>
+
+          <aside class="ad-slot" aria-label="Espaço publicitário">
+            <div class="ad-label">PUBLICIDADE</div>
+            <div class="ad-content">
+              <span class="ad-sparkle" aria-hidden="true">✳</span>
+              <strong>Seu anúncio<br />pode estar aqui</strong>
+              <span>Um espaço para boas ideias.</span>
+            </div>
+            <span class="ad-size">300 × 250</span>
+          </aside>
+        </div>
+      </div>
+
+      <div
+        class="page-shell page-screen stocks-screen"
+        id="stocks-screen"
+        hidden
+      >
+        <section class="intro" aria-labelledby="stocks-page-title">
+          <p class="eyebrow">
+            <span class="eyebrow-line"></span> COTAÇÕES E SIMULAÇÃO
+          </p>
+          <h1 id="stocks-page-title">
+            Acompanhe o mercado.<br /><span>Simule possibilidades.</span>
+          </h1>
+          <p class="intro-copy">
+            Consulte cotações e veja como um valor investido teria variado
+            conforme o período histórico selecionado.
+          </p>
+        </section>
+
+        <div class="content-layout">
+          <div class="main-column">
+            <section
+              class="calculator-card stocks-card"
+              aria-labelledby="quotes-title"
+            >
+              <div class="card-heading">
+                <div>
+                  <p class="section-kicker">MERCADO BRASILEIRO</p>
+                  <h2 id="quotes-title">Cotações de ações</h2>
+                </div>
+                <button
+                  class="refresh-button"
+                  id="refresh-quotes"
+                  type="button"
+                  aria-label="Atualizar cotações"
+                >
+                  <span aria-hidden="true">↻</span> Atualizar
+                </button>
+              </div>
+              <p class="market-note">
+                Valores fornecidos pela
+                <a
+                  href="https://brapi.dev/docs/acoes/cotacao"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >brapi.dev</a
+                >. Busque por ticker ou nome da empresa. Cotações podem ter atraso.
+              </p>
+              <form class="ticker-form" id="ticker-form">
+                <label class="sr-only" for="ticker-symbol"
+                  >Buscar ação pelo ticker</label
+                >
+                <input
+                  id="ticker-symbol"
+                  name="symbol"
+                  type="text"
+                  maxlength="40"
+                  placeholder="Ticker ou nome da empresa"
+                  autocomplete="off"
+                  autocapitalize="characters"
+                  aria-describedby="ticker-help"
+                />
+                <button class="secondary-button" type="submit">
+                  Buscar ação
+                </button>
+              </form>
+              <p class="field-hint ticker-help" id="ticker-help">
+                Ex.: PETR4, VALE ou Petrobras. Resultados incluem ações disponíveis na API.
+              </p>
+              <p
+                class="api-status"
+                id="quotes-status"
+                role="status"
+                aria-live="polite"
+              >
+                Carregando cotações...
+              </p>
+              <div class="stock-grid" id="stock-list" aria-live="polite"></div>
+              <button class="load-more-button" id="load-more-stocks" type="button" hidden>
+                Carregar mais resultados
+              </button>
+              <section class="stock-history" id="stock-history" aria-labelledby="stock-history-title" hidden>
+                <div class="stock-history-heading">
+                  <div>
+                    <p class="section-kicker">OSCILAÇÃO HISTÓRICA</p>
+                    <h3 id="stock-history-title">Histórico da ação</h3>
+                  </div>
+                  <strong class="history-current-price" id="history-current-price"></strong>
+                </div>
+                <div class="history-periods" role="group" aria-label="Período do gráfico">
+                  <button type="button" data-history-range="1d" aria-pressed="false">1D</button>
+                  <button type="button" data-history-range="5d" aria-pressed="false">5D</button>
+                  <button type="button" data-history-range="1mo" aria-pressed="true">1M</button>
+                  <button type="button" data-history-range="1y" aria-pressed="false">1A</button>
+                  <button type="button" data-history-range="5y" aria-pressed="false">5A</button>
+                </div>
+                <p class="history-status" id="history-status" role="status" aria-live="polite"></p>
+                <div class="history-summary">
+                  <strong id="history-return">—</strong>
+                  <span id="history-dates"></span>
+                </div>
+                <div class="history-chart-wrap">
+                  <canvas id="stock-history-chart" role="img" aria-label="Gráfico do histórico de preços da ação"></canvas>
+                </div>
+                <p class="field-hint history-source">
+                  Oscilação calculada entre o primeiro e o último fechamento ajustado disponível no período. No intradiário, usa o último preço negociado retornado pela API.
+                </p>
+              </section>
+            </section>
+
+            <section
+              class="calculator-card simulation-card"
+              aria-labelledby="stock-simulation-title"
+            >
+              <div class="card-heading">
+                <div>
+                  <p class="section-kicker">SIMULAÇÃO EDUCATIVA</p>
+                  <h2 id="stock-simulation-title">E se você investisse?</h2>
+                </div>
+                <span class="calculator-icon" aria-hidden="true">↗</span>
+              </div>
+              <p class="selected-stock-note" id="selected-stock-note">
+                Escolha uma ação acima para usar a cotação atual na simulação.
+              </p>
+              <form id="stock-simulation-form" novalidate>
+                <div class="fields-grid">
+                  <div class="field">
+                    <label for="stock-investment">Quanto teria investido?</label>
+                    <div class="input-wrap">
+                      <span class="input-prefix" aria-hidden="true">R$</span>
+                      <input
+                        id="stock-investment"
+                        name="investment"
+                        type="number"
+                        min="0.01"
+                        step="100"
+                        value="1000"
+                        inputmode="decimal"
+                      />
+                    </div>
+                    <span class="field-hint" id="stock-investment-hint"
+                      >O valor é aplicado ao início do período selecionado no gráfico.</span
+                    >
+                  </div>
+                  <div class="field">
+                    <label for="stock-return" id="stock-return-label">Variação no período selecionado (%)</label>
+                    <div class="input-with-select">
+                      <input
+                        id="stock-return"
+                        name="historicalReturn"
+                        type="number"
+                        step="any"
+                        value=""
+                        placeholder="Selecione uma ação"
+                        readonly
+                        inputmode="decimal"
+                      />
+                      <span class="input-suffix">%</span>
+                    </div>
+                    <span class="field-hint" id="stock-return-hint"
+                      >Preenchido conforme o filtro selecionado no gráfico</span
+                    >
+                  </div>
+                </div>
+                <p
+                  class="form-error"
+                  id="stock-form-error"
+                  role="alert"
+                  hidden
+                ></p>
+                <button class="calculate-button" type="submit" disabled>
+                  Calcular valor neste período <span aria-hidden="true">→</span>
+                </button>
+              </form>
+              <section
+                class="stock-results"
+                id="stock-results"
+                aria-live="polite"
+                aria-labelledby="stock-result-title"
+                hidden
+              >
+              <div class="results-heading">
+                <div>
+                  <p class="section-kicker">SIMULAÇÃO COM DADOS HISTÓRICOS</p>
+                  <h3 id="stock-result-title">Como o valor teria variado</h3>
+                </div>
+                <span class="results-period" id="stock-result-period"></span>
+              </div>
+              <div class="result-total">
+                <span>Valor ao fim do período</span>
+                <strong id="stock-future-value">R$ 0,00</strong>
+              </div>
+              <div class="result-breakdown">
+                <div>
+                  <span class="breakdown-label">Valor inicial</span>
+                  <strong id="stock-invested-value">R$ 0,00</strong>
+                </div>
+                <div>
+                  <span class="breakdown-label">Ganho ou perda</span>
+                  <strong id="stock-gain-value">R$ 0,00</strong>
+                </div>
+                <div>
+                  <span class="breakdown-label">Ações compradas no início</span>
+                  <strong id="stock-share-count">—</strong>
+                </div>
+              </div>
+              <p class="disclaimer">
+                Simulação retrospectiva: usa a variação observada no período selecionado para mostrar como o valor teria mudado. O desempenho passado não prevê retornos futuros. Não considera impostos ou taxas e pressupõe compra fracionária.
+              </p>
+              </section>
+            </section>
+          </div>
+
+          <aside class="ad-slot" aria-label="Espaço publicitário">
+            <div class="ad-label">PUBLICIDADE</div>
+            <div class="ad-content">
+              <span class="ad-sparkle" aria-hidden="true">✳</span>
+              <strong>Seu anúncio<br />pode estar aqui</strong>
+              <span>Um espaço para boas ideias.</span>
+            </div>
+            <span class="ad-size">300 × 250</span>
+          </aside>
+        </div>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <a
+        class="footer-brand"
+        href="#inicio"
+        aria-label="Renda Clara, voltar ao início"
+      >
+        <span class="brand-mark" aria-hidden="true">r.</span> renda<span
+          class="brand-light"
+          >clara</span
+        >
+      </a>
+      <p>Feito para deixar o seu próximo passo mais claro.</p>
+      <a
+        class="personal-link"
+        href="https://luizank.github.io/site-pessoal/"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Dê uma olhada no meu site pessoal! <span aria-hidden="true">↗</span>
+      </a>
+    </footer>
+  </body>
+</html>
